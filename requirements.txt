@@ -1,6 +1,6 @@
-# requirements.txt
 requests
 beautifulsoup4
 googletrans==4.0.0-rc1
 transformers
-torch  # GPU 모델 사용 시 필요
+torch==1.13.1
+

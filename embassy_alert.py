@@ -7,24 +7,34 @@ from datetime import datetime
 import re
 from googletrans import Translator  # type: ignore
 from transformers import pipeline
+import os
 
-# Flask 앱 (헬시 체크용)
+# Hugging Face 토큰 환경변수 자동 인식
+# (Koyeb에서 "HF_HUB_TOKEN" 환경변수 설정 필요)
+os.environ["HF_HOME"] = "/workspace/.cache/huggingface"
+os.environ["TRANSFORMERS_CACHE"] = "/workspace/.cache/transformers"
+
+# Flask 헬시 체크용 서버
 app = Flask(__name__)
 @app.route("/")
 def health():
     return "OK", 200
 
 # 디스코드 웹훅 주소
-WEBHOOK_URL = "https://discord.com/api/webhooks/1364605565136801792/M97P9KFLlipdBVAg_A-6GyoxKlot84qQS9Iz9shRMapfA5haVdW59Q1ErGP2P6xtLcTg"  # 여기에 웹훅 주소 넣기
+WEBHOOK_URL = "https://discord.com/api/webhooks/1364605565136801792/M97P9KFLlipdBVAg_A-6GyoxKlot84qQS9Iz9shRMapfA5haVdW59Q1ErGP2P6xtLcTg"  # 여기 수정하세요
 
-# 번역기 및 distilBART 요약기 초기화
+# 번역기 + 요약기 초기화
 translator = Translator()
-summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
+summarizer = pipeline(
+    "summarization",
+    model="sshleifer/distilbart-cnn-12-6",
+    use_auth_token=os.getenv("HF_HUB_TOKEN")  # Hugging Face 인증 토큰 사용
+)
 
-# 중복 방지를 위한 링크 기록
+# 중복 방지용 링크 저장소
 sent_links = set()
 
-# 뉴스 검색 (국내 + 해외)
+# 뉴스 검색 (RSS)
 def search_news_multilang():
     urls = [
         "https://news.google.com/rss/search?q=대한민국+대사관+철수",
@@ -38,7 +48,7 @@ def search_news_multilang():
         all_items.extend(items)
     return all_items
 
-# 국가 및 시각 추출
+# 날짜 및 국가 추출
 def extract_country_and_time(text):
     countries = re.findall(r"[가-힣]{2,10} 대사관", text)
     dates = re.findall(r"\d{1,2}월 \d{1,2}일|\d{4}년 \d{1,2}월 \d{1,2}일", text)
@@ -48,7 +58,7 @@ def extract_country_and_time(text):
 
 # 요약 + 번역
 def summarize_and_translate(text):
-    summary = summarizer(text[:1024], max_length=80, min_length=20, do_sample=False)[0]['summary_text']
+    summary = summarizer(text[:1000], max_length=80, min_length=20, do_sample=False)[0]['summary_text']
     translated = translator.translate(summary, src='en', dest='ko').text
     return translated
 
@@ -57,12 +67,12 @@ def send_discord_alert(title, link, country, time_str, content_kr):
     message = f"@everyone\n🚨 **{country} 대사관 철수 감지**\n📰보도내용: {content_kr}\n🕒보도시각: {time_str}\n🔗링크: {link}"
     requests.post(WEBHOOK_URL, json={"content": message})
 
-# 로그 저장
+# 로그 기록
 def save_log(title, link, country, time_str, content_kr):
     with open("log.txt", "a", encoding="utf-8") as f:
         f.write(f"{datetime.now()} | {country} | {time_str} | {title} | {content_kr} | {link}\n")
 
-# 뉴스 감지 루틴
+# 뉴스 확인 루틴
 def run_once():
     global sent_links
     print("[INFO]", datetime.now(), "- 뉴스 확인 중...")
@@ -99,16 +109,16 @@ def run_once():
         except Exception as e:
             print(f"❌ 처리 실패: {e}")
 
-# 백그라운드 루프 실행
+# 백그라운드 감시 루프
 def background_loop():
     while True:
         run_once()
         print("1시간 대기 중...\n")
         time.sleep(3600)
 
-# 스레드로 감시 루프 실행
+# 쓰레드 시작
 threading.Thread(target=background_loop).start()
 
-# Flask 서버 실행 (헬시 체크 대응)
+# Flask 서버 시작 (헬시 체크 대응)
 app.run(host="0.0.0.0", port=8080)
 

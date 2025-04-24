@@ -1,7 +1,5 @@
-flask
 requests
 beautifulsoup4
 googletrans==4.0.0-rc1
 transformers==4.36.2
 torch==2.0.1
-numpy<2

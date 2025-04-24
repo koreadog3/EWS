@@ -1,16 +1,3 @@
-import threading
-from flask import Flask
-
-# Flask 앱 생성
-app = Flask(__name__)
-
-@app.route("/")
-def health_check():
-    return "OK", 200
-
-def run_flask():
-    app.run(host="0.0.0.0", port=8000)
-
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
@@ -113,13 +100,4 @@ def main():
         run_once()
         print("1시간 대기 중...\n")
         time.sleep(3600)
-
-if __name__ == "__main__":
-    # Flask 서버를 백그라운드 쓰레드로 실행
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
-
-    # 메인 함수 실행
-    main()
 

@@ -1,3 +1,16 @@
+import threading
+from flask import Flask
+
+# Flask 앱 생성
+app = Flask(__name__)
+
+@app.route("/")
+def health_check():
+    return "OK", 200
+
+def run_flask():
+    app.run(host="0.0.0.0", port=8000)
+
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
@@ -84,7 +97,7 @@ def run_once():
                 summary_ko = title
 
             # AI 필터링: "주한" 또는 "대한민국 대사관" 관련만 전송
-            if any(keyword in summary_ko for keyword in [["주한", "대한민국 대사관", "한국 내 대사관", "서울 주재", "한국 대사관"]]):
+            if any(keyword in summary_ko for keyword in ["주한", "대한민국 대사관", "한국 내 대사관", "서울 주재", "한국 대사관"]):
                 send_discord_alert(title, link, country, time_str, summary_ko)
                 save_log(title, link, country, time_str, summary_ko)
                 sent_links.add(link)
@@ -93,7 +106,7 @@ def run_once():
 
         except Exception as e:
             print(f"❌ 처리 실패: {e}")
-
+            
 # 메인 루프
 def main():
     while True:
@@ -102,4 +115,11 @@ def main():
         time.sleep(3600)
 
 if __name__ == "__main__":
+    # Flask 서버를 백그라운드 쓰레드로 실행
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
+
+    # 메인 함수 실행
     main()
+

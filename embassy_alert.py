@@ -8,18 +8,23 @@ import re
 from googletrans import Translator  # type: ignore
 from transformers import pipeline
 
+# Flask 앱 (헬시 체크용)
 app = Flask(__name__)
-
 @app.route("/")
-def health_check():
-    return "OK", 200  # 헬시 체크 통과
+def health():
+    return "OK", 200
 
-WEBHOOK_URL = "https://discord.com/api/webhooks/1364605565136801792/M97P9KFLlipdBVAg_A-6GyoxKlot84qQS9Iz9shRMapfA5haVdW59Q1ErGP2P6xtLcTg"  # 너의 웹훅
+# 디스코드 웹훅 주소
+WEBHOOK_URL = "https://discord.com/api/webhooks/1364605565136801792/M97P9KFLlipdBVAg_A-6GyoxKlot84qQS9Iz9shRMapfA5haVdW59Q1ErGP2P6xtLcTg"  # 여기에 웹훅 주소 넣기
 
+# 번역기 및 distilBART 요약기 초기화
 translator = Translator()
-summarizer = pipeline("summarization", model="t5-base", tokenizer="t5-base")
+summarizer = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
+
+# 중복 방지를 위한 링크 기록
 sent_links = set()
 
+# 뉴스 검색 (국내 + 해외)
 def search_news_multilang():
     urls = [
         "https://news.google.com/rss/search?q=대한민국+대사관+철수",
@@ -33,6 +38,7 @@ def search_news_multilang():
         all_items.extend(items)
     return all_items
 
+# 국가 및 시각 추출
 def extract_country_and_time(text):
     countries = re.findall(r"[가-힣]{2,10} 대사관", text)
     dates = re.findall(r"\d{1,2}월 \d{1,2}일|\d{4}년 \d{1,2}월 \d{1,2}일", text)
@@ -40,19 +46,23 @@ def extract_country_and_time(text):
     time_found = dates[0] if dates else datetime.now().strftime("%Y-%m-%d %H:%M")
     return country, time_found
 
+# 요약 + 번역
 def summarize_and_translate(text):
-    summary = summarizer(text[:1000], max_length=80, min_length=20, do_sample=False)[0]['summary_text']
+    summary = summarizer(text[:1024], max_length=80, min_length=20, do_sample=False)[0]['summary_text']
     translated = translator.translate(summary, src='en', dest='ko').text
     return translated
 
+# 디스코드 전송
 def send_discord_alert(title, link, country, time_str, content_kr):
     message = f"@everyone\n🚨 **{country} 대사관 철수 감지**\n📰보도내용: {content_kr}\n🕒보도시각: {time_str}\n🔗링크: {link}"
     requests.post(WEBHOOK_URL, json={"content": message})
 
+# 로그 저장
 def save_log(title, link, country, time_str, content_kr):
     with open("log.txt", "a", encoding="utf-8") as f:
         f.write(f"{datetime.now()} | {country} | {time_str} | {title} | {content_kr} | {link}\n")
 
+# 뉴스 감지 루틴
 def run_once():
     global sent_links
     print("[INFO]", datetime.now(), "- 뉴스 확인 중...")
@@ -89,15 +99,16 @@ def run_once():
         except Exception as e:
             print(f"❌ 처리 실패: {e}")
 
+# 백그라운드 루프 실행
 def background_loop():
     while True:
         run_once()
         print("1시간 대기 중...\n")
         time.sleep(3600)
 
-# 스레드로 백그라운드 실행
+# 스레드로 감시 루프 실행
 threading.Thread(target=background_loop).start()
 
-# Flask 앱 실행 (헬시 체크 통과용)
+# Flask 서버 실행 (헬시 체크 대응)
 app.run(host="0.0.0.0", port=8080)
 
